@@ -30,7 +30,9 @@ repositories {
 }
 
 dependencies {
-    compile(name: 'arcore_client', ext: 'aar')
+    //compile(name: 'arcore_client', ext: 'aar')
+    implementation 'com.google.ar:core:1.0.0'
+    compile group: 'javax.vecmath', name: 'vecmath', version: '1.5.2'
     compile 'com.android.support:appcompat-v7:26.1.0'
     compile 'com.android.support:design:26.1.0'
 }

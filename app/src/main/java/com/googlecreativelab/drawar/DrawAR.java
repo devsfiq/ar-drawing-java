@@ -27,6 +27,7 @@ import android.opengl.Matrix;
 import android.os.Bundle;
 import android.support.v4.view.GestureDetectorCompat;
 import android.util.DisplayMetrics;
+import android.view.Display;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
@@ -36,9 +37,11 @@ import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
+import com.google.ar.core.Camera;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
 import com.google.ar.core.Session;
+import com.google.ar.core.TrackingState;
 import com.googlecreativelab.drawar.rendering.BackgroundRenderer;
 import com.googlecreativelab.drawar.rendering.LineShaderRenderer;
 import com.googlecreativelab.drawar.rendering.LineUtils;
@@ -68,6 +71,7 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
     private BackgroundRenderer mBackgroundRenderer = new BackgroundRenderer();
     private LineShaderRenderer mLineShaderRenderer = new LineShaderRenderer();
     private Frame mFrame;
+    private Camera mCamera;
 
     private float[] projmtx = new float[16];
     private float[] viewmtx = new float[16];
@@ -185,8 +189,8 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
         mSession = new Session(/*context=*/this);
 
         // Create default config, check is supported, create session from that config.
-        mDefaultConfig = Config.createDefaultConfig();
-        mDefaultConfig.setLightingMode(Config.LightingMode.DISABLED);
+        mDefaultConfig = new Config(mSession);
+        mDefaultConfig.setLightEstimationMode(Config.LightEstimationMode.DISABLED);
         if (!mSession.isSupported(mDefaultConfig)) {
             Toast.makeText(this, "This device does not support AR", Toast.LENGTH_LONG).show();
             finish();
@@ -271,7 +275,7 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
         // permission on Android M and above, now is a good time to ask the user for it.
         if (PermissionHelper.hasCameraPermission(this)) {
             // Note that order matters - see the note in onPause(), the reverse applies here.
-            mSession.resume(mDefaultConfig);
+            mSession.resume();
             mSurfaceView.onResume();
         } else {
             PermissionHelper.requestCameraPermission(this);
@@ -346,7 +350,10 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
         GLES20.glViewport(0, 0, width, height);
         // Notify ARCore session that the view size changed so that the perspective matrix and
         // the video background can be properly adjusted.
-        mSession.setDisplayGeometry(width, height);
+
+        Display display = ((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
+
+        mSession.setDisplayGeometry(display.getRotation(), width, height);
     }
 
 
@@ -364,21 +371,22 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
 
             // Update ARCore frame
             mFrame = mSession.update();
+            mCamera = mFrame.getCamera();
 
             // Update tracking states
-            if (mFrame.getTrackingState() == Frame.TrackingState.TRACKING && !bIsTracking.get()) {
+            if (mCamera.getTrackingState() == TrackingState.TRACKING && !bIsTracking.get()) {
                 bIsTracking.set(true);
-            } else if (mFrame.getTrackingState() == Frame.TrackingState.NOT_TRACKING && bIsTracking.get()) {
+            } else if (mCamera.getTrackingState() == TrackingState.PAUSED && bIsTracking.get()) {
                 bIsTracking.set(false);
                 bTouchDown.set(false);
             }
 
             // Get projection matrix.
-            mSession.getProjectionMatrix(projmtx, 0, AppSettings.getNearClip(), AppSettings.getFarClip());
-            mFrame.getViewMatrix(viewmtx, 0);
+            mCamera.getProjectionMatrix(projmtx, 0, AppSettings.getNearClip(), AppSettings.getFarClip());
+            mCamera.getViewMatrix(viewmtx, 0);
 
             float[] position = new float[3];
-            mFrame.getPose().getTranslation(position, 0);
+            mCamera.getPose().getTranslation(position, 0);
 
             // Check if camera has moved much, if thats the case, stop touchDown events
             // (stop drawing lines abruptly through the air)
@@ -449,7 +457,7 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
         mBackgroundRenderer.draw(mFrame);
 
         // Draw Lines
-        if (mFrame.getTrackingState() == Frame.TrackingState.TRACKING) {
+        if (mCamera.getTrackingState() == TrackingState.TRACKING) {
             mLineShaderRenderer.draw(viewmtx, projmtx, mScreenWidth, mScreenHeight, AppSettings.getNearClip(), AppSettings.getFarClip());
         }
     }
@@ -472,8 +480,8 @@ public class DrawAR extends Activity implements GLSurfaceView.Renderer, GestureD
         float[] t = new float[3];
         float[] m = new float[16];
 
-        mFrame.getPose().getTranslation(t, 0);
-        float[] z = mFrame.getPose().getZAxis();
+        mCamera.getPose().getTranslation(t, 0);
+        float[] z = mCamera.getPose().getZAxis();
         Vector3f zAxis = new Vector3f(z[0], z[1], z[2]);
         zAxis.y = 0;
         zAxis.normalize();

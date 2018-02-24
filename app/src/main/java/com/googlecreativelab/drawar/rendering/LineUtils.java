@@ -17,7 +17,7 @@
 
 import android.opengl.Matrix;
 
-import com.google.ar.core.math.Ray;
+//import com.google.ar.core.math.Ray;
 import com.googlecreativelab.drawar.AppSettings;
 import javax.vecmath.Vector2f;
 import javax.vecmath.Vector3f;
